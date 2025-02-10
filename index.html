@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VitalTrack - AI Fitness Companion</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <style>
+        :root {
+            --primary: #6C5CE7;
+            --secondary: #A8A4FF;
+            --accent: #FF7675;
+            --background: #2D2F3A;
+            --text: #FFFFFF;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--background) 0%, #1A1C23 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-gap: 25px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 25px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .progress-ring {
+            width: 180px;
+            height: 180px;
+            margin: 20px auto;
+            position: relative;
+        }
+
+        .progress-circle {
+            transform: rotate(-90deg);
+            width: 100%;
+            height: 100%;
+        }
+
+        .progress-circle circle {
+            fill: none;
+            stroke-width: 8;
+            stroke-linecap: round;
+        }
+
+        .progress-circle .background {
+            stroke: rgba(255, 255, 255, 0.1);
+        }
+
+        .progress-circle .progress {
+            stroke: var(--primary);
+            transition: stroke-dashoffset 0.5s ease;
+        }
+
+        .step-count {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.5em;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .weather-card {
+            background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .weather-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent 20%, rgba(255,255,255,0.1) 50%, transparent 80%);
+            animation: glow 6s infinite linear;
+        }
+
+        .water-progress {
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #water-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #64B5F6 0%, #2196F3 100%);
+            transition: width 0.5s ease;
+            position: relative;
+        }
+
+        #water-progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+            animation: wave 2s infinite linear;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 15px;
+            margin: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border: none;
+            padding: 12px 25px;
+            border-radius: 15px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 92, 231, 0.4);
+        }
+
+        @keyframes glow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes wave {
+            0% { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+
+        .floating-shapes {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .floating-shapes div {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+            opacity: 0.1;
+            animation: float 20s infinite linear;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(100px, 100px); }
+            50% { transform: translate(-50px, 150px); }
+            75% { transform: translate(-100px, -50px); }
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 15px;
+        }
+
+        input {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-shapes">
+        <div style="width: 300px; height: 300px; top: 20%; left: 10%;"></div>
+        <div style="width: 200px; height: 200px; top: 60%; right: 15%;"></div>
+    </div>
+
+    <div class="dashboard">
+        <!-- Step Counter -->
+        <div class="card">
+            <h2>🚶 Daily Steps</h2>
+            <div class="progress-ring">
+                <svg class="progress-circle">
+                    <circle class="background" cx="90" cy="90" r="80"></circle>
+                    <circle class="progress" cx="90" cy="90" r="80"></circle>
+                </svg>
+                <div class="step-count">
+                    <span id="step-count">0</span>
+                </div>
+            </div>
+            <div style="text-align: center;">
+                <button onclick="simulateSteps()">
+                    <i class="fas fa-plus"></i>
+                    Add Steps
+                </button>
+                <p style="margin-top: 15px; opacity: 0.8;">
+                    Goal: <input type="number" id="step-goal-input" value="10000">
+                </p>
+            </div>
+        </div>
+
+        <!-- Weather Card -->
+        <div class="card weather-card">
+            <div style="position: relative; z-index: 1;">
+                <h3 id="location" style="margin-bottom: 5px;">📍 Loading...</h3>
+                <p id="temperature" style="font-size: 2em; margin: 10px 0;">--°C</p>
+                <p id="weather-condition" style="opacity: 0.9;">--</p>
+            </div>
+        </div>
+
+        <!-- Water Tracker -->
+        <div class="card">
+            <h3>💧 Hydration Tracker</h3>
+            <div class="water-progress">
+                <div id="water-progress-bar"></div>
+            </div>
+            <div style="margin-top: 20px; text-align: center;">
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button onclick="addWater(250)">
+                        <i class="fas fa-tint"></i>
+                        +250ml
+                    </button>
+                    <button onclick="addWater(500)">
+                        <i class="fas fa-tint"></i>
+                        +500ml
+                    </button>
+                </div>
+                <p style="margin-top: 15px; opacity: 0.8;">
+                    Goal: <input type="number" id="water-goal-input" value="2000"> ml
+                </p>
+            </div>
+        </div>
+
+        <!-- AI Insights -->
+        <div class="card" style="grid-column: span 2;">
+            <h3>🤖 AI Health Insights</h3>
+            <div class="chart-container">
+                <canvas id="health-chart"></canvas>
+            </div>
+            <p id="ai-analysis" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">Analyzing your wellness data...</p>
+        </div>
+
+        <!-- Achievements -->
+        <div class="card">
+            <h3>🏆 Achievements</h3>
+            <div id="badges-container"></div>
+        </div>
+
+        <!-- Additional Features -->
+        <div class="card" style="grid-column: span 2;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                <button onclick="shareProgress()">
+                    <i class="fas fa-share"></i>
+                    Share
+                </button>
+                <button id="voice-command">
+                    <i class="fas fa-microphone"></i>
+                    Voice
+                </button>
+                <button onclick="connectWearable()">
+                    <i class="fas fa-bluetooth"></i>
+                    Connect
+                </button>
+                <button onclick="logSleep()">
+                    <i class="fas fa-bed"></i>
+                    Log Sleep
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Core Configuration
+        const API_KEY = '2ade3e7d77a789866e34ce6c589ca626';
+        let steps = parseInt(localStorage.getItem('steps')) || 0;
+        let waterIntake = parseInt(localStorage.getItem('waterIntake')) || 0;
+        let stepGoal = parseInt(localStorage.getItem('stepGoal')) || 10000;
+        let waterGoal = parseInt(localStorage.getItem('waterGoal')) || 2000;
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDisplays();
+            getLocation();
+            setupVoice();
+            renderHistoryChart();
+            predictSteps();
+            checkAchievements();
+            setInterval(waterReminder, 60 * 60 * 1000);
+        });
+
+        // Core Functions
+        function simulateSteps() {
+            steps += Math.floor(Math.random() * 1000) + 500;
+            localStorage.setItem('steps', steps);
+            updateDisplays();
+            checkAchievements();
+            analyzeData();
+        }
+
+        function updateDisplays() {
+            document.getElementById('step-count').textContent = steps;
+            document.getElementById('water-total').textContent = waterIntake;
+            
+            // Update progress circle
+            const stepProgress = (steps / stepGoal) * 100;
+            const circumference = 2 * Math.PI * 80;
+            const offset = circumference - (stepProgress / 100) * circumference;
+            document.querySelector('.progress').style.strokeDasharray = `${circumference} ${circumference}`;
+            document.querySelector('.progress').style.strokeDashoffset = offset;
+            
+            // Update water progress
+            const waterProgress = (waterIntake / waterGoal) * 100;
+            document.getElementById('water-progress-bar').style.width = `${waterProgress}%`;
+        }
+
+        // Weather Functions
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(fetchWeather);
+            }
+        }
+
+        async function fetchWeather(position) {
+            try {
+                const { latitude, longitude } = position.coords;
+                const response = await fetch(
+                    `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&units=metric&appid=${API_KEY}`
+                );
+                const data = await response.json();
+                document.getElementById('location').textContent = data.name;
+                document.getElementById('temperature').textContent = `${Math.round(data.main.temp)}°C`;
+                document.getElementById('weather-condition').textContent = data.weather[0].main;
+            } catch (error) {
+                console.error('Error fetching weather:', error);
+            }
+        }
+
+        // Water System
+        function addWater(ml) {
+            waterIntake += ml;
+            localStorage.setItem('waterIntake', waterIntake);
+            updateDisplays();
+        }
+
+        function waterReminder() {
+            if (waterIntake < waterGoal) {
+                alert('Time to hydrate! 💧');
+            }
+        }
+
+        // AI Analysis
+        function analyzeData() {
+            const analysis = steps >= stepGoal 
+                ? "Excellent! You're meeting your goals!" 
+                : "Almost there! Keep pushing to reach your goal!";
+            document.getElementById('ai-analysis').textContent = analysis;
+        }
+
+        // Additional Features
+        function shareProgress() {
+            const shareData = {
+                title: 'My Fitness Progress',
+                text: `🏃 ${steps} steps | 💧 ${waterIntake}ml water | 🌡️ ${document.getElementById('temperature').textContent}`,
+            };
+            navigator.share?.(shareData);
+        }
+
+        function setupVoice() {
+            const recognition = new webkitSpeechRecognition();
+            recognition.onresult = (event) => {
+                const command = event.results[0][0].transcript.toLowerCase();
+                if(command.includes('water')) addWater(500);
+                if(command.includes('steps')) simulateSteps();
+            };
+            document.getElementById('voice-command').onclick = () => recognition.start();
+        }
+
+        function checkAchievements() {
+            const badges = {
+                5000: '🥉 Bronze Stepper',
+                10000: '🥈 Silver Stepper',
+                15000: '🏅 Gold Stepper'
+            };
+            const container = document.getElementById('badges-container');
+            Object.entries(badges).forEach(([threshold, text]) => {
+                if(steps >= threshold && !container.textContent.includes(text)) {
+                    container.innerHTML += `<div class="badge">${text}</div>`;
+                }
+            });
+        }
+
+        function logSleep() {
+            const sleepHours = prompt('Enter sleep duration in hours:');
+            localStorage.setItem('sleepHours', sleepHours);
+            alert(`Logged ${sleepHours} hours of sleep!`);
+        }
+
+        function renderHistoryChart() {
+            new Chart(document.getElementById('health-chart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Steps History',
+                        data: [6500, 8000, 9200, 11000, 7500, 9800, 12000],
+                        borderColor: '#6C5CE7',
+                        tension: 0.4,
+                        backgroundColor: 'rgba(108, 92, 231, 0.1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        async function predictSteps() {
+            const model = tf.sequential({
+                layers: [tf.layers.dense({units: 1, inputShape: [1]})]
+            });
+            model.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
+            
+            const xs = tf.tensor1d([1, 2, 3, 4, 5]);
+            const ys = tf.tensor1d([5000, 6000, 7000, 8000, 9000]);
+            
+            await model.fit(xs, ys, {epochs: 500});
+            const prediction = model.predict(tf.tensor1d([6]));
+            document.getElementById('ai-analysis').textContent += 
+                ` | Tomorrow's prediction: ${Math.round(prediction.dataSync()[0])} steps`;
+        }
+
+        function connectWearable() {
+            navigator.bluetooth.requestDevice({ 
+                acceptAllDevices: true,
+                optionalServices: ['heart_rate', 'step_counter']
+            }).then(device => {
+                alert(`Connected to: ${device.name}`);
+            }).catch(error => {
+                console.error('Bluetooth error:', error);
+            });
+        }
+
+        // Event Listeners
+        document.getElementById('step-goal-input').addEventListener('change', (e) => {
+            stepGoal = e.target.value;
+            localStorage.setItem('stepGoal',stepGoal);
+            updateDisplays();
+        });
+            document.getElementById('water-goal-input').addEventListener('change', (e) => {
+        waterGoal = e.target.value;
+        localStorage.setItem('waterGoal', waterGoal);
+        updateDisplays();
+    });
+</script>
+</body>
+</html>
